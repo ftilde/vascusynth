@@ -188,7 +188,7 @@ void NodeTable::setPos(int index, double* source){
 int NodeTable::getParent(int index){
     
 	if(index > (int) nodes.size()) {
-		return NULL;
+		return 0;
     }
 	
 	return (int) nodes[index][4];
@@ -222,7 +222,7 @@ void NodeTable::setParent(int index, int parent){
 double NodeTable::getLeftRatio(int index){
     
 	if (index > (int) nodes.size()) {
-		return NULL;
+		return 0;
     }
     
 	return nodes[index][5];
@@ -255,7 +255,7 @@ void NodeTable::setLeftRatio(int index, double ratio){
 double NodeTable::getRightRatio(int index){
     
 	if (index > (int) nodes.size()) {
-		return NULL;
+		return 0;
     }
     
 	return nodes[index][6];
@@ -287,7 +287,7 @@ void NodeTable::setRightRatio(int index, double ratio){
 double NodeTable::getFlow(int index){
     
 	if (index > (int) nodes.size()) {
-		return NULL;
+		return 0;
     }
     
 	return nodes[index][7];
@@ -319,7 +319,7 @@ void NodeTable::setFlow(int index, double flow){
 int NodeTable::getLeftChild(int index){
     
 	if(index > (int) nodes.size()) {
-		return NULL;
+		return 0;
     }
     
 	return (int) nodes[index][8];
@@ -352,7 +352,7 @@ void NodeTable::setLeftChild(int index, int id){
 int NodeTable::getRightChild(int index){
     
 	if (index > (int) nodes.size()) {
-		return NULL;
+		return 0;
     }
     
 	return (int) nodes[index][9];
@@ -384,7 +384,7 @@ void NodeTable::setRightChild(int index, int id){
 double NodeTable::getRadius(int index){
     
 	if(index > (int) nodes.size()) {
-		return NULL;
+		return 0;
     }
     
 	return nodes[index][11];
@@ -417,7 +417,7 @@ void NodeTable::setRadius(int index, double radius){
 double NodeTable::getReducedResistance(int index){
     
 	if (index > (int) nodes.size()) {
-		return NULL;
+		return 0;
     }
     
 	return nodes[index][10];

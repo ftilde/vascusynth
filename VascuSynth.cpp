@@ -6,7 +6,7 @@
 	Date: $Date: 2011/02/08 10:43:00 $
 	Version: $Revision: 1.0 $
 
-Copyright (c) 2011 Medical Imaging Analysis Lab, Simon Fraser University, 
+Copyright (c) 2011 Medical Imaging Analysis Lab, Simon Fraser University,
 British Columbia, Canada.
 All rights reserved.
 
@@ -26,25 +26,25 @@ from this software without specific prior written permission.
 
  * Modified source versions must be plainly marked as such, and must not be
 misrepresented as being the original software.
- 
- * Free for non-commercial use only.  For commercial use, explicit approval 
+
+ * Free for non-commercial use only.  For commercial use, explicit approval
 must be requested by contacting the Authors.
- 
+
  * If you use the code in your work, you must acknowledge it
- 
- * Modifications of the source code must also be released as open source 
- 
+
+ * Modifications of the source code must also be released as open source
+
 THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDER AND CONTRIBUTORS ``AS IS''
 AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
 IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
 ARE DISCLAIMED. IN NO EVENT SHALL THE AUTHORS OR CONTRIBUTORS BE LIABLE FOR
 ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR 
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
 SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
 CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- 
+
 =========================================================================*/
 
 //commands for mkdir
@@ -61,6 +61,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "itkImageFileWriter.h"
 #include "itkImageSeriesWriter.h"
 #include "itkNumericSeriesFileNames.h"
+#include "writehdf5volume.h"
 
 #include <iostream>
 #include <fstream>
@@ -80,28 +81,30 @@ using namespace std;
  * @throws string exception if the file cannot be read
  */
 vector<string> * readFileLines(const char * filename){
-	
+
 	ifstream oFile;
 	oFile.open(filename, ios::in);
 	vector<string> * lines = new vector<string>;
 	string line;
-		
+
 	if(oFile.is_open()){
-	
+
 		while(!oFile.eof()){
 			getline(oFile, line);
-			string copy = line;
-			lines->push_back(copy);
+			if(line.empty()) {
+			    break;
+			}
+			lines->push_back(line);
 		}
-		
+
 		oFile.close();
-		
+
 	} else {
-		throw "Could not open file " + ( (string) filename);
+		throw "Could not open file: " + ( (string) filename);
 	}
-	
+
 	return lines;
-	
+
 }
 
 
@@ -128,26 +131,26 @@ int mmkdir(const char * dirname) {
  * converts an integer to a string
  */
 string itoa(int value, int base) {
-	
+
 	string buf;
-	
+
 	// check that the base if valid
 	if (base < 2 || base > 16) return buf;
-	
+
 	enum { kMaxDigits = 35 };
 	buf.reserve( kMaxDigits ); // Pre-allocate enough space.
-	
+
 	int quotient = value;
-	
+
 	// Translating number to string with base:
 	do {
 		buf += "0123456789abcdef"[ std::abs( quotient % base ) ];
 		quotient /= base;
 	} while ( quotient );
-	
+
 	// Append the negative sign
 	if ( value < 0) buf += '-';
-	
+
 	reverse( buf.begin(), buf.end() );
 	return buf;
 }
@@ -155,9 +158,9 @@ string itoa(int value, int base) {
 /**
  *  Reads the parameters from the parameter file and then builds
  *  the vascular structure in the form of a tree
- * 
+ *
  *	Parameter File Entries:
- * 
+ *
  *	SUPPLY_MAP: supply map file
  *	OXYGENATION_MAP: oxygenation map file
  *	PERF_POINT: perf_x perf_y perf_z
@@ -169,15 +172,15 @@ string itoa(int value, int base) {
  *	LAMBDA: lambda
  *	MU: mu
  *	MIN_DISTANCE: minDistance
- *	NUM_NODES: numNodes 
+ *	NUM_NODES: numNodes
  *	VOXEL_WIDTH: voxelWidth
  *	CLOSEST_NEIGHBOURS: closestNeighbours
  */
 VascularTree * buildTree(const char * filename){
-	
+
 	SupplyMap * sm = NULL;
 	OxygenationMap * om = NULL;
-    
+
 	double* perf = new double[3];
 	double pperf;
 	double pterm;
@@ -194,7 +197,7 @@ VascularTree * buildTree(const char * filename){
 	string line;
     string supplyMapFileName;
     string oxygenMapFileName;
-    
+
     //c++ doesn't allow us to check for undefined variables
     //so we need a boolean so that we know that the variables
     //are defined.
@@ -212,135 +215,135 @@ VascularTree * buildTree(const char * filename){
     bool closestNeighboursSet = false;
     bool supplyMapFileNameSet = false;
     bool oxygenMapFileNameSet = false;
-	
+
 	vector<string> *mapFilesLines = readFileLines(filename);
     int size = (int) mapFilesLines->size();
-	
+
 	for (int i=0; i < size; i++) {
-		
+
 		line = mapFilesLines->at(i);
-		
+
 		if (line.compare("") == 0) {
 			break;
 		}
-		
+
 		int colonPosition = line.find(":");
 		string name = line.substr(0, colonPosition);
 		string value = line.substr(colonPosition+2);
-		
+
 		if (name.compare("SUPPLY_MAP") == 0) {
-			
+
             //store the supplyMapFileName for later
             //the ordering of things matters so just save the file name
             //then initialize the map later so that the user can type the fields
             //in whatever order
             supplyMapFileName = value;
             supplyMapFileNameSet = true;
-			
+
 		} else if (name.compare("OXYGENATION_MAP") == 0) {
-            
+
             //same as supply map since we need random seed before
             //we init the oxygenation map
             oxygenMapFileName = value;
             oxygenMapFileNameSet = true;
-             
+
 		} else if (name.compare("PERF_POINT") == 0) {
-			
+
 			int spacePosition = value.find(" ");
 			string pointvalue = value.substr(0, spacePosition);
 			perf[0] = atof(pointvalue.c_str());
-			
+
 			int spacePosition2 = value.find(" ", spacePosition+1);
 			pointvalue = value.substr(spacePosition+1, spacePosition2);
 			perf[1] = atof(pointvalue.c_str());
-			
+
 			pointvalue = value.substr(spacePosition2+1);
 			perf[2] = atof(pointvalue.c_str());
-            
+
             perfSet = true;
-						
+
 		} else if (name.compare("PERF_PRESSURE") == 0){
-			
+
 			pperf = atof(value.c_str());
             pperfSet = true;
-			
+
 		} else if (name.compare("TERM_PRESSURE") == 0){
-			
+
 			pterm = atof(value.c_str());
             ptermSet = true;
-			
+
 		} else if (name.compare("PERF_FLOW") == 0){
-			 
+
 			qperf = atof(value.c_str());
             qperfSet = true;
-			
+
 		} else if (name.compare("RHO") == 0){
-			
+
 			rho = atof(value.c_str());
             rhoSet = true;
-			
+
 		} else if (name.compare("GAMMA") == 0){
-			
+
 			gamma = atof(value.c_str());
             gammaSet = true;
-			
+
 		} else if (name.compare("LAMBDA") == 0){
-			 
+
 			lambda = atof(value.c_str());
             lambdaSet = true;
-			
+
 		} else if (name.compare( "MU") == 0){
-			 
+
 			mu = atof(value.c_str());
             muSet = true;
-			
+
 		} else if (name.compare("MIN_DISTANCE") == 0){
-			
+
 			minDistance = atof(value.c_str());
             minDistanceSet = true;
-			 
+
 		} else if (name.compare("NUM_NODES") == 0){
-			 
+
 			numNodes = atoi(value.c_str());
             numNodesSet = true;
-			
+
 		} else if (name.compare("VOXEL_WIDTH") == 0){
-			
+
 			voxelWidth = atof(value.c_str());
             voxelWidthSet = true;
-			
+
 		} else if (name.compare("CLOSEST_NEIGHBOURS") == 0){
-			 
+
 			closestNeighbours = atoi(value.c_str());
             closestNeighboursSet = true;
-			
+
 		} else if (name.compare("RANDOM_SEED") == 0){
-			 
+
 			randomSeed = atoi(value.c_str());
-			
+
 		} else {
-			
+
 		}
-		
-		
+
+
 	}
-        
+
     //make sure that we have everything defined
     if (perfSet && pperfSet && ptermSet && qperfSet && rhoSet && gammaSet && lambdaSet && muSet && minDistanceSet && numNodesSet && voxelWidthSet && closestNeighboursSet && supplyMapFileNameSet && oxygenMapFileNameSet) {
-    
+
         //load the supply map
         sm = new SupplyMap();
-        
+
         try {
             sm->loadMap(supplyMapFileName);
         } catch (char * str) {
             throw (string) str;
         }
-        
+
         //load the oxygenation map, rand seed will be -1 if there
         //is no randomSeed specified or it will be whatever the user specifies
         om = new OxygenationMap(sm, randomSeed);
-        
+
         try {
             om->loadMap(oxygenMapFileName);
         } catch (char * str) {
@@ -352,14 +355,14 @@ VascularTree * buildTree(const char * filename){
         //and throw an error if it is not (and catch the error in the main function)
         VascularTree *vt = new VascularTree(om, perf, pperf, pterm, qperf, rho, gamma, lambda, mu, minDistance, numNodes, voxelWidth, closestNeighbours);
         vt->buildTree();
-        
+
         return vt;
-        
+
     } else {
-     
+
         string errorStr = "Error while parsing the parameter file, not all parameters have been defined.";
         throw errorStr;
-        
+
     }
 }
 
@@ -399,11 +402,12 @@ void drawImage(TreeDrawer * td, const char* rootName){
 
 	image->SetRegions( region );
 	image->Allocate();
-	
+
 	ImageType::IndexType pixelIndex;
 	pixelIndex[0] = 0; // x position
 	pixelIndex[1] = 0; // y position
 	pixelIndex[2] = 0; // z position
+	ByteVolume vol(svec3(size[0], size[1], size[2]));
 
 	for(int i = 0; i < td->dim[0]; i++){
 		for(int j = 0; j < td->dim[1]; j++){
@@ -411,11 +415,15 @@ void drawImage(TreeDrawer * td, const char* rootName){
 				pixelIndex[0] = i;
 				pixelIndex[1] = j;
 				pixelIndex[2] = k;
-				
-				image->SetPixel(pixelIndex, td->imageAt(i, j, k));
+				svec3 pos(i,j,k);
+				char val = td->imageAt(i, j, k);
+				vol.set_voxel(pos, val);
+
+				image->SetPixel(pixelIndex, val);
 			}
 		}
 	}
+	write_hdf5_volume(std::string(rootName) + ".h5", vol);
 
 
 	typedef itk::Image< unsigned char, 2 > Image2DType;
@@ -442,30 +450,30 @@ void drawImage(TreeDrawer * td, const char* rootName){
 	try{
 		writer->Update();
 	}catch( itk::ExceptionObject & excp ){
-        
+
         throw "Exception thrown while reading the image";
-        
+
 	}
 
 	return;
 }
 
-/** 
+/**
  *  applies noise to the volumetric image
- * 
+ *
  * noise.txt format:
- * 
+ *
  * SHADOW: numShadows
  * GAUSSIAN: median sigma
  * UNIFORM: lb ub
  * SALTPEPER: valSalt probsalt valpepper probpepper
- * 
+ *
  * noise will be added in the order specified by the file
- * 
+ *
  * one image for each noise file will be generated
  */
 void applyNoise(TreeDrawer *td, const char* noiseFile){
-    
+
 	ifstream mapFile;
 	mapFile.open(noiseFile);
 	string line;
@@ -474,64 +482,64 @@ void applyNoise(TreeDrawer *td, const char* noiseFile){
 	int numShadows;
 	char valSalt, valPepper;
 
-	if(mapFile.is_open()){		
+	if(mapFile.is_open()){
 		while(!mapFile.eof()){
 			getline(mapFile, line);
 			char* tok = new char[line.size()];
 			strcpy(tok, line.c_str());
-			
+
 			if(line.length() == 0)
 				continue;
 
 			char * field = strtok(tok, ":");
-					
+
 			if(strcmp(field, "SHADOW") == 0){
-				
+
 				//apply shadow noise
 				numShadows = atoi(strtok(NULL, " "));
-				
+
                 td->addShadows(numShadows);
-			
+
 			} else if(strcmp(field, "GAUSSIAN") == 0){
-				
+
 				//apply gaussian noise
 				median = atof(strtok(NULL, " "));
 				sigma = atof(strtok(NULL, " "));
-				                
+
 				td->addNoise_gaussian(median, sigma);
-				
+
 			} else if(strcmp(field, "UNIFORM") == 0){
-				
+
 				//applying uniform noise
 				lb = atof(strtok(NULL, " "));
 				ub = atof(strtok(NULL, " "));
-				
+
                 td->addNoise_Uniform(lb, ub);
-				
+
 			} else {
-				
+
 				if (strcmp(field, "SALTPEPPER") == 0) {
-				
+
 					//apply salt and pepper noise
 					valSalt = (char)atoi(strtok(NULL, " "));
 					probSalt = atof(strtok(NULL, " "));
 					valPepper = (char)atoi(strtok(NULL, " "));
 					probPepper = atof(strtok(NULL, " "));
 					valPepper = (char)valPepper;
-					
+
 					td->addNoise_saltPepper(valSalt, probSalt, valPepper, probPepper);
-				
+
 				}
-				
-			} 
+
+			}
 		}
-	
+
     } else {
-    
+
         throw "Could not read the noise file";
-        
+
     }
-	
+
 	mapFile.close();
 }
 
@@ -560,7 +568,7 @@ void subPrint_node(NodeTable *nt, int segment, ofstream &os){
 	os<<"        <float>"<<pos[1]<<"</float>"<<endl;
 	os<<"        <float>"<<pos[2]<<"</float>"<<endl;
 	os<<"      </tup>"<<endl;
-	os<<"    </attr>"<<endl;	
+	os<<"    </attr>"<<endl;
 	os<<"  </node>"<<endl;
 
 	if(nt->getType(segment) != NodeTable::TERM){
@@ -606,7 +614,7 @@ void printTreeStructure(VascularTree * vt, const char * filePath){
 	//writing the tree structure as GXL to the filePath specified
 	output.open(filePath);
 	output<<"<gxl><graph id=\""<<filePath<<"\" edgeids=\" true\" edgemode=\" directed\" hypergraph=\" false\">"<<endl;
-	
+
 	//this seems really really stupid to do, why would we
 	//loop through the entire structure to find the root, and then
 	//recursively the nodes and edges?
@@ -623,9 +631,9 @@ void printTreeStructure(VascularTree * vt, const char * filePath){
 	}
 
     output.close();
-    
+
 	throw "Unable to find root node.  The GXL file has not been generated.";
-	
+
 }
 
 
@@ -649,9 +657,9 @@ int main(int argc, char** argv){
 		cout << "Usage: VascuSynth [paramFile] [imageNameFile] [voxelWidth]" << endl;
 		return 0;
 	}
-	
+
     try {
-    
+
         //read the param files and image name files
         vector<string> *paramFiles = readFileLines(argv[1]);
         vector<string> *imageNameFiles = readFileLines(argv[2]);
@@ -659,48 +667,51 @@ int main(int argc, char** argv){
         //voxel widths
         string voxelWidth = argv[3];
         string *noiseFiles = new string[argc-4];
-        
+
         int paramFilesSize = (int) paramFiles->size();
-        
+
         //go through each param file and build tree an spit it out
         for(int m = 0; m < paramFilesSize; m++){
-            
+
             string paramFile = paramFiles->at(m);
             string rootDirectory = imageNameFiles->at(m);
 
             for(int i = 4; i < argc; i++) {
                 noiseFiles[i-4] = argv[i];
             }
-            
+
             int numNoise = argc-4;
-            
+
             cout << "Reading parameters and building the tree..." << endl;
-            
+
             //build the tree
             VascularTree * vt = buildTree(paramFile.c_str());
-            
+
             cout << "The vascular tree has been built sucessfully..." << endl;
-            
+
             //filter out the /r that appears at times and messes up the directory name
             if (rootDirectory[ rootDirectory.length() - 1 ] == '\r') {
                 rootDirectory = rootDirectory.substr(0, rootDirectory.length()-1);
             }
-            
+
             //create the directory for the output
             rootDirectory = "./"+rootDirectory;
             mmkdir(rootDirectory.c_str());
-            
+
             //create the GXL file
             string treeStructure = rootDirectory+"/tree_structure.xml";
             printTreeStructure(vt, treeStructure.c_str());
-            
+
             cout << "The directory for the image has been created..." << endl;
             cout << "Information about the vascular structure has been saved in the gxl file tree_structure.xml..." << endl;
 
             double corner1[] = {0,0,0};
-            double corner2[] = {vt->oxMap->dim[0], vt->oxMap->dim[1], vt->oxMap->dim[2]};
+            double corner2[] = {static_cast<double>(vt->oxMap->dim[0]),
+				static_cast<double>(vt->oxMap->dim[1]),
+				static_cast<double>(vt->oxMap->dim[2])};
+
             TreeDrawer * td = drawTree(vt, corner1, corner2, atof(voxelWidth.c_str()));
-                
+
             //create the subdirectory for the images
             string imageName = rootDirectory+"/original_image";
             mmkdir(imageName.c_str());
@@ -708,29 +719,29 @@ int main(int argc, char** argv){
             //output the images
             imageName = imageName + "/image";
             drawImage(td, imageName.c_str());
-            
+
             cout << "The volumetric image has been saved..." << endl;
 
             char *buff = new char[20];
-            
+
             if (numNoise > 0) {
                 cout << "The images are being degraded by noise..." << endl;
             }
-            
+
             //apply noise to the images - creating niose_images
             for(int i = 0; i < numNoise; i++){
-                
+
                 TreeDrawer * td_c = td->copy();
                 applyNoise(td_c, noiseFiles[i].c_str());
-                
+
                 string noiseImage = rootDirectory+"/noise_image_"+itoa(i, 10);
                 mmkdir(noiseImage.c_str());
-                
+
                 noiseImage = noiseImage+"/image";
                 drawImage(td_c, noiseImage.c_str());
-            
+
             }
-            
+
             if (numNoise > 0) {
                 cout << "Images have been succesfully degraded by noise and saved..." << endl;
             }
@@ -740,7 +751,7 @@ int main(int argc, char** argv){
             delete td;
             delete vt;
         }
-        
+
     } catch (string str) {
         cout << "ERROR: " << str << endl;
         cout << "Exiting VascuSynth" << endl;
