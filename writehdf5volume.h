@@ -26,8 +26,17 @@ protected:
     std::string what_;
 };
 
+#if H5_VERSION_GE(1, 10, 1) || H5_VERSION_GE(1, 8, 21) && !H5_VERSION_GE(1, 10, 0)
+#define H5_STUPID_LOCATION_API_CHANGES
+#endif
 
-void writeVec3Attribute(const H5::H5Location& loc, const H5std_string& name, const vec3& vec) {
+void writeVec3Attribute(
+#ifdef H5_STUPID_LOCATION_API_CHANGES
+        const H5::H5Object& loc,
+#else
+        const H5::H5Location& loc,
+#endif
+        const H5std_string& name, const vec3& vec) {
     // Convert tgt vector to hdf style
     float h5vec[3];
     h5vec[0] = vec.x;
