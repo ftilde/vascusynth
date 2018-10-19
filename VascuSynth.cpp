@@ -747,7 +747,7 @@ int main(int argc, char** argv){
             }
 
             //clean up
-            delete buff;
+            delete[] buff;
             delete td;
             delete vt;
         }

@@ -227,7 +227,7 @@ unsigned char TreeDrawer::valueAtVoxel(int* voxel){
 		value = 0;
     }
     
-	delete point;
+	delete[] point;
 	return (unsigned char)value;
 }
 

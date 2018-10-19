@@ -542,7 +542,7 @@ bool VascularTree::connectCandidate(double* point, int steps){
 		delete test;
 	}
 	
-	delete candidateSegments;
+	delete[] candidateSegments;
 
 	if(!foundSolution)
 		return false; //could not connect candidate to ANY segment
