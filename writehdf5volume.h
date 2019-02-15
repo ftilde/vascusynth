@@ -74,7 +74,7 @@ struct ByteVolume {
     }
 };
 
-void write_hdf5_volume(const std::string& fileName, ByteVolume volume, int deflateLevel=9)
+void write_hdf5_volume(const std::string& fileName, ByteVolume volume, float voxelsize, int deflateLevel=1)
 {
     bool shuffle = false;
     svec3 chunkSize = svec3(0,0,0);
@@ -200,6 +200,7 @@ void write_hdf5_volume(const std::string& fileName, ByteVolume volume, int defla
         throw HDF5WriteException("An Error occured while writing volume to file " + fileName);
     }
     //Write metadata to dataSet
-    writeVec3Attribute(*dataSet, "element_size_um", vec3(1,1,1));
+    float voxelSizeUm = voxelsize*1000;
+    writeVec3Attribute(*dataSet, "element_size_um", vec3(voxelSizeUm, voxelSizeUm, voxelSizeUm));
 }
 

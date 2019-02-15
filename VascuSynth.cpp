@@ -423,7 +423,7 @@ void drawImage(TreeDrawer * td, const char* rootName){
 			}
 		}
 	}
-	write_hdf5_volume(std::string(rootName) + ".h5", vol);
+	write_hdf5_volume(std::string(rootName) + ".h5", vol, td->imageVoxelWidth);
 
 
 	typedef itk::Image< unsigned char, 2 > Image2DType;
