@@ -1,10 +1,10 @@
 /*=========================================================================
 
-	Program: VascuSynth
-	Module: $RCSfile: VascuSynth.cpp,v $
-	Language: C++
-	Date: $Date: 2011/02/08 10:43:00 $
-	Version: $Revision: 1.0 $
+    Program: VascuSynth
+    Module: $RCSfile: VascuSynth.cpp,v $
+    Language: C++
+    Date: $Date: 2011/02/08 10:43:00 $
+    Version: $Revision: 1.0 $
 
 Copyright (c) 2011 Medical Imaging Analysis Lab, Simon Fraser University,
 British Columbia, Canada.
@@ -55,13 +55,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <sys/stat.h>
 #endif
 
-#include "itkImage.h"
-#include "itkImageFileReader.h"
-#include "itkImageSeriesReader.h"
-#include "itkImageFileWriter.h"
-#include "itkImageSeriesWriter.h"
-#include "itkNumericSeriesFileNames.h"
 #include "writehdf5volume.h"
+#include "intervalwalker.h"
 
 #include <iostream>
 #include <fstream>
@@ -69,6 +64,9 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <map>
 #include <iterator>
 #include <cmath>
+#include <iostream>
+#include <cstring>
+#include <algorithm>
 
 using namespace std;
 
@@ -82,28 +80,28 @@ using namespace std;
  */
 vector<string> * readFileLines(const char * filename){
 
-	ifstream oFile;
-	oFile.open(filename, ios::in);
-	vector<string> * lines = new vector<string>;
-	string line;
+    ifstream oFile;
+    oFile.open(filename, ios::in);
+    vector<string> * lines = new vector<string>;
+    string line;
 
-	if(oFile.is_open()){
+    if(oFile.is_open()){
 
-		while(!oFile.eof()){
-			getline(oFile, line);
-			if(line.empty()) {
-			    break;
-			}
-			lines->push_back(line);
-		}
+        while(!oFile.eof()){
+            getline(oFile, line);
+            if(line.empty()) {
+                break;
+            }
+            lines->push_back(line);
+        }
 
-		oFile.close();
+        oFile.close();
 
-	} else {
-		throw "Could not open file: " + ( (string) filename);
-	}
+    } else {
+        throw "Could not open file: " + ( (string) filename);
+    }
 
-	return lines;
+    return lines;
 
 }
 
@@ -120,7 +118,7 @@ vector<string> * readFileLines(const char * filename){
  */
 int mmkdir(const char * dirname) {
 #ifdef _WIN32
-	return mkdir(dirname);
+    return mkdir(dirname);
 #else
     return mkdir(dirname, 0777);
 #endif
@@ -132,69 +130,69 @@ int mmkdir(const char * dirname) {
  */
 string itoa(int value, int base) {
 
-	string buf;
+    string buf;
 
-	// check that the base if valid
-	if (base < 2 || base > 16) return buf;
+    // check that the base if valid
+    if (base < 2 || base > 16) return buf;
 
-	enum { kMaxDigits = 35 };
-	buf.reserve( kMaxDigits ); // Pre-allocate enough space.
+    enum { kMaxDigits = 35 };
+    buf.reserve( kMaxDigits ); // Pre-allocate enough space.
 
-	int quotient = value;
+    int quotient = value;
 
-	// Translating number to string with base:
-	do {
-		buf += "0123456789abcdef"[ std::abs( quotient % base ) ];
-		quotient /= base;
-	} while ( quotient );
+    // Translating number to string with base:
+    do {
+        buf += "0123456789abcdef"[ std::abs( quotient % base ) ];
+        quotient /= base;
+    } while ( quotient );
 
-	// Append the negative sign
-	if ( value < 0) buf += '-';
+    // Append the negative sign
+    if ( value < 0) buf += '-';
 
-	reverse( buf.begin(), buf.end() );
-	return buf;
+    reverse( buf.begin(), buf.end() );
+    return buf;
 }
 
 /**
  *  Reads the parameters from the parameter file and then builds
  *  the vascular structure in the form of a tree
  *
- *	Parameter File Entries:
+ *    Parameter File Entries:
  *
- *	SUPPLY_MAP: supply map file
- *	OXYGENATION_MAP: oxygenation map file
- *	PERF_POINT: perf_x perf_y perf_z
- *	PERF_PRESSURE: perfussion pressure
- *	TERM_PRESSURE: termination pressure
- *	PERF_FLOW:	perfusion flow
- *	RHO: rho
- *	GAMMA: gamma
- *	LAMBDA: lambda
- *	MU: mu
- *	MIN_DISTANCE: minDistance
- *	NUM_NODES: numNodes
- *	VOXEL_WIDTH: voxelWidth
- *	CLOSEST_NEIGHBOURS: closestNeighbours
+ *    SUPPLY_MAP: supply map file
+ *    OXYGENATION_MAP: oxygenation map file
+ *    PERF_POINT: perf_x perf_y perf_z
+ *    PERF_PRESSURE: perfussion pressure
+ *    TERM_PRESSURE: termination pressure
+ *    PERF_FLOW:    perfusion flow
+ *    RHO: rho
+ *    GAMMA: gamma
+ *    LAMBDA: lambda
+ *    MU: mu
+ *    MIN_DISTANCE: minDistance
+ *    NUM_NODES: numNodes
+ *    VOXEL_WIDTH: voxelWidth
+ *    CLOSEST_NEIGHBOURS: closestNeighbours
  */
 VascularTree * buildTree(const char * filename){
 
-	SupplyMap * sm = NULL;
-	OxygenationMap * om = NULL;
+    SupplyMap * sm = NULL;
+    OxygenationMap * om = NULL;
 
-	double* perf = new double[3];
-	double pperf;
-	double pterm;
-	double qperf;
-	double rho;
-	double gamma;
-	double lambda;
-	double mu;
-	double minDistance;
-	int numNodes;
-	double voxelWidth;
-	int closestNeighbours;
-	int randomSeed = -1;
-	string line;
+    double* perf = new double[3];
+    double pperf;
+    double pterm;
+    double qperf;
+    double rho;
+    double gamma;
+    double lambda;
+    double mu;
+    double minDistance;
+    int numNodes;
+    double voxelWidth;
+    int closestNeighbours;
+    int randomSeed = -1;
+    string line;
     string supplyMapFileName;
     string oxygenMapFileName;
 
@@ -216,22 +214,22 @@ VascularTree * buildTree(const char * filename){
     bool supplyMapFileNameSet = false;
     bool oxygenMapFileNameSet = false;
 
-	vector<string> *mapFilesLines = readFileLines(filename);
+    vector<string> *mapFilesLines = readFileLines(filename);
     int size = (int) mapFilesLines->size();
 
-	for (int i=0; i < size; i++) {
+    for (int i=0; i < size; i++) {
 
-		line = mapFilesLines->at(i);
+        line = mapFilesLines->at(i);
 
-		if (line.compare("") == 0) {
-			break;
-		}
+        if (line.compare("") == 0) {
+            break;
+        }
 
-		int colonPosition = line.find(":");
-		string name = line.substr(0, colonPosition);
-		string value = line.substr(colonPosition+2);
+        int colonPosition = line.find(":");
+        string name = line.substr(0, colonPosition);
+        string value = line.substr(colonPosition+2);
 
-		if (name.compare("SUPPLY_MAP") == 0) {
+        if (name.compare("SUPPLY_MAP") == 0) {
 
             //store the supplyMapFileName for later
             //the ordering of things matters so just save the file name
@@ -240,93 +238,93 @@ VascularTree * buildTree(const char * filename){
             supplyMapFileName = value;
             supplyMapFileNameSet = true;
 
-		} else if (name.compare("OXYGENATION_MAP") == 0) {
+        } else if (name.compare("OXYGENATION_MAP") == 0) {
 
             //same as supply map since we need random seed before
             //we init the oxygenation map
             oxygenMapFileName = value;
             oxygenMapFileNameSet = true;
 
-		} else if (name.compare("PERF_POINT") == 0) {
+        } else if (name.compare("PERF_POINT") == 0) {
 
-			int spacePosition = value.find(" ");
-			string pointvalue = value.substr(0, spacePosition);
-			perf[0] = atof(pointvalue.c_str());
+            int spacePosition = value.find(" ");
+            string pointvalue = value.substr(0, spacePosition);
+            perf[0] = atof(pointvalue.c_str());
 
-			int spacePosition2 = value.find(" ", spacePosition+1);
-			pointvalue = value.substr(spacePosition+1, spacePosition2);
-			perf[1] = atof(pointvalue.c_str());
+            int spacePosition2 = value.find(" ", spacePosition+1);
+            pointvalue = value.substr(spacePosition+1, spacePosition2);
+            perf[1] = atof(pointvalue.c_str());
 
-			pointvalue = value.substr(spacePosition2+1);
-			perf[2] = atof(pointvalue.c_str());
+            pointvalue = value.substr(spacePosition2+1);
+            perf[2] = atof(pointvalue.c_str());
 
             perfSet = true;
 
-		} else if (name.compare("PERF_PRESSURE") == 0){
+        } else if (name.compare("PERF_PRESSURE") == 0){
 
-			pperf = atof(value.c_str());
+            pperf = atof(value.c_str());
             pperfSet = true;
 
-		} else if (name.compare("TERM_PRESSURE") == 0){
+        } else if (name.compare("TERM_PRESSURE") == 0){
 
-			pterm = atof(value.c_str());
+            pterm = atof(value.c_str());
             ptermSet = true;
 
-		} else if (name.compare("PERF_FLOW") == 0){
+        } else if (name.compare("PERF_FLOW") == 0){
 
-			qperf = atof(value.c_str());
+            qperf = atof(value.c_str());
             qperfSet = true;
 
-		} else if (name.compare("RHO") == 0){
+        } else if (name.compare("RHO") == 0){
 
-			rho = atof(value.c_str());
+            rho = atof(value.c_str());
             rhoSet = true;
 
-		} else if (name.compare("GAMMA") == 0){
+        } else if (name.compare("GAMMA") == 0){
 
-			gamma = atof(value.c_str());
+            gamma = atof(value.c_str());
             gammaSet = true;
 
-		} else if (name.compare("LAMBDA") == 0){
+        } else if (name.compare("LAMBDA") == 0){
 
-			lambda = atof(value.c_str());
+            lambda = atof(value.c_str());
             lambdaSet = true;
 
-		} else if (name.compare( "MU") == 0){
+        } else if (name.compare( "MU") == 0){
 
-			mu = atof(value.c_str());
+            mu = atof(value.c_str());
             muSet = true;
 
-		} else if (name.compare("MIN_DISTANCE") == 0){
+        } else if (name.compare("MIN_DISTANCE") == 0){
 
-			minDistance = atof(value.c_str());
+            minDistance = atof(value.c_str());
             minDistanceSet = true;
 
-		} else if (name.compare("NUM_NODES") == 0){
+        } else if (name.compare("NUM_NODES") == 0){
 
-			numNodes = atoi(value.c_str());
+            numNodes = atoi(value.c_str());
             numNodesSet = true;
 
-		} else if (name.compare("VOXEL_WIDTH") == 0){
+        } else if (name.compare("VOXEL_WIDTH") == 0){
 
-			voxelWidth = atof(value.c_str());
+            voxelWidth = atof(value.c_str());
             voxelWidthSet = true;
 
-		} else if (name.compare("CLOSEST_NEIGHBOURS") == 0){
+        } else if (name.compare("CLOSEST_NEIGHBOURS") == 0){
 
-			closestNeighbours = atoi(value.c_str());
+            closestNeighbours = atoi(value.c_str());
             closestNeighboursSet = true;
 
-		} else if (name.compare("RANDOM_SEED") == 0){
+        } else if (name.compare("RANDOM_SEED") == 0){
 
-			randomSeed = atoi(value.c_str());
+            randomSeed = atoi(value.c_str());
 
-		} else {
+        } else {
 
-		}
+        }
 
 
-	}
+    }
 
     //make sure that we have everything defined
     if (perfSet && pperfSet && ptermSet && qperfSet && rhoSet && gammaSet && lambdaSet && muSet && minDistanceSet && numNodesSet && voxelWidthSet && closestNeighboursSet && supplyMapFileNameSet && oxygenMapFileNameSet) {
@@ -370,92 +368,139 @@ VascularTree * buildTree(const char * filename){
  * draws the tree to a matrix
  */
 TreeDrawer *drawTree(VascularTree * vt, double * corner1, double * corner2, double imageVoxelWidth){
-	TreeDrawer * td = new TreeDrawer(vt, imageVoxelWidth, corner1, corner2);
-	td->drawImage();
-	return td;
+    TreeDrawer * td = new TreeDrawer(vt, imageVoxelWidth, corner1, corner2);
+    td->drawImage();
+    return td;
 }
+
+static bool inSegment(vec3 point, vec3 p1, vec3 p2, float radius){
+    vec3 diff = p1-point;
+    vec3 diff2 = diff*diff;
+    float d2 = diff2.hsum();
+    if(d2 < radius*radius) {
+        return true;
+    }
+
+    vec3 pdiff = p2-p1;
+    float t = -(pdiff*diff).hsum()/(pdiff*pdiff).hsum();
+
+    if (t < 0 || t > 1) {
+        return false;
+    } else {
+        vec3 p = (pdiff*t+p1)-point;
+        return (p*p).hsum() < radius*radius;
+    }
+}
+
 
 /**
  * draws the tree from the TreeDrawer into a volumetric 3D
  * image as a series of 2D png slices
  */
-void drawImage(TreeDrawer * td, const char* rootName){
-	typedef unsigned char PixelType;
-	const unsigned int Dimension = 3;
-	typedef itk::Image< PixelType, Dimension > ImageType;
+void drawImage(VascularTree& td, svec3 mapSize, svec3 size, float voxelWidth, const char* rootName){
 
-	ImageType::Pointer image = ImageType::New();
+    // VascularTree components are apparently in "physical" coordinates (with
+    // applied spacing, but no offset). So in order to go from normalized
+    // ([0,1]) to physical we go normalized->voxel->physical.
+    vec3 normalizedToVT = vec3(mapSize);
 
-	ImageType::SizeType size;
-	size[0] = td->dim[0]; // size along X
-	size[1] = td->dim[1]; // size along Y
-	size[2] = td->dim[2]; // size along Z
+    vec3 sampleToNormalized = vec3(1.0) / vec3(size);
 
-	ImageType::IndexType start;
-	start[0] = 0; // first index on X
-	start[1] = 0; // first index on Y
-	start[2] = 0; // first index on Z
+    vec3 sampleToVT = normalizedToVT * sampleToNormalized;
+    vec3 vtToSample = vec3(1.0) / sampleToVT;
 
-	ImageType::RegionType region;
-	region.SetSize( size );
-	region.SetIndex( start );
+    auto vol = HDF5Volume::create(std::string(rootName) + ".h5", size, voxelWidth);
 
-	image->SetRegions( region );
-	image->Allocate();
+    NodeTable& nt = td.nt;
+    size_t numNodes = nt.nodes.size();
 
-	ImageType::IndexType pixelIndex;
-	pixelIndex[0] = 0; // x position
-	pixelIndex[1] = 0; // y position
-	pixelIndex[2] = 0; // z position
-	ByteVolume vol(svec3(size[0], size[1], size[2]));
+    std::vector<Interval<int, size_t>> cylinderIntervals;
 
-	for(int i = 0; i < td->dim[0]; i++){
-		for(int j = 0; j < td->dim[1]; j++){
-			for(int k = 0 ; k < td->dim[2]; k++){
-				pixelIndex[0] = i;
-				pixelIndex[1] = j;
-				pixelIndex[2] = k;
-				svec3 pos(i,j,k);
-				char val = td->imageAt(i, j, k);
-				vol.set_voxel(pos, val);
+    struct Cylinder {
+        vec3 p1;
+        vec3 p2;
+        float radius;
+        svec3 llf;
+        svec3 urb;
+    };
+    std::vector<Cylinder> cylinders;
+    for(int i = 1; i < numNodes; i++){
+        dvec3 p1(nt.getPos(i));
+        int parent = nt.getParent(i);
+        dvec3 p2(nt.getPos(parent));
+        float radius = nt.getRadius(i)/td.mapVoxelWidth;
 
-				image->SetPixel(pixelIndex, val);
-			}
-		}
-	}
-	write_hdf5_volume(std::string(rootName) + ".h5", vol, td->imageVoxelWidth);
+        svec3 llf = (vtToSample*(p1.min(p2) - vec3(radius))).floor().max(vec3(0.0));
+        svec3 urb = (vtToSample*(p1.max(p2) + vec3(radius))).ceil();
 
+        cylinders.push_back(Cylinder {
+            p1,
+            p2,
+            radius,
+            llf,
+            urb,
+        });
+    }
 
-	typedef itk::Image< unsigned char, 2 > Image2DType;
-	typedef itk::ImageSeriesWriter< ImageType, Image2DType > WriterType;
-	WriterType::Pointer writer = WriterType::New();
-	writer->SetInput( image);
+    size_t numCylinders = cylinders.size();
+    std::vector<Interval<int, size_t>> zIntervals;
+    for(int i = 0; i < numCylinders; ++i) {
+        auto& c = cylinders[i];
+        zIntervals.emplace_back(
+                    c.llf.z,
+                    c.urb.z,
+                    i);
+    }
+    IntervalWalker<int, size_t> zWalker(0, std::move(zIntervals));
 
-	typedef itk::NumericSeriesFileNames NameGeneratorType;
-	NameGeneratorType::Pointer nameGenerator = NameGeneratorType::New();
+    svec3 sliceDim { size.x, size.y, 1 };
+    for(int z = 0; z < size.z; z++){
+        ByteVolume slice(sliceDim);
 
-	std::string format = rootName;
-	format += "%03d";
-	format += ".jpg";
-	nameGenerator->SetSeriesFormat( format.c_str() );
+        auto cylinderIt = zWalker.next();
+        std::vector<Interval<int, size_t>> yIntervals;
+        for(auto it = cylinderIt.next(); it != cylinderIt.end(); it = cylinderIt.next()) {
+            auto& i = it->value;
+            auto& c = cylinders[i];
+            yIntervals.emplace_back(c.llf.y, c.urb.y, i);
+        }
+        IntervalWalker<int, size_t> yWalker(0, std::move(yIntervals));
 
-	const unsigned int firstSlice = start[2];
-	const unsigned int lastSlice = start[2] + size[2] - 1;
-	nameGenerator->SetStartIndex( firstSlice );
-	nameGenerator->SetEndIndex( lastSlice );
-	nameGenerator->SetIncrementIndex( 1 );
+        for(int y = 0; y < size.y; y++){
 
-	writer->SetFileNames( nameGenerator->GetFileNames() );
+            auto cylinderIt = yWalker.next();
+            std::vector<Interval<int, size_t>> xIntervals;
+            for(auto it = cylinderIt.next(); it != cylinderIt.end(); it = cylinderIt.next()) {
+                auto& i = it->value;
+                auto& c = cylinders[i];
+                xIntervals.emplace_back(c.llf.x, c.urb.x, i);
+            }
+            IntervalWalker<int, size_t> xWalker(0, std::move(xIntervals));
 
-	try{
-		writer->Update();
-	}catch( itk::ExceptionObject & excp ){
+            for(int x = 0 ; x < size.x; x++){
+                auto cylinderIt = xWalker.next();
 
-        throw "Exception thrown while reading the image";
+                vec3 imagePos(x, y, z);
+                vec3 treePos = sampleToVT * imagePos;
 
-	}
+                unsigned char val = 0;
+                for(auto it = cylinderIt.next(); it != cylinderIt.end(); it = cylinderIt.next()) {
+                    auto& i = it->value;
+                    auto& c = cylinders[i];
+                    if(inSegment(treePos, c.p1, c.p2, c.radius)) {
+                        val = 255;
+                    }
+                }
 
-	return;
+                //char val = td->imageAt(i, j, k);
+                svec3 slicePos(x,y,0);
+                slice.set_voxel(slicePos, val);
+            }
+        }
+        vol.writeSlice(slice, z);
+    }
+
+    return;
 }
 
 /**
@@ -474,65 +519,65 @@ void drawImage(TreeDrawer * td, const char* rootName){
  */
 void applyNoise(TreeDrawer *td, const char* noiseFile){
 
-	ifstream mapFile;
-	mapFile.open(noiseFile);
-	string line;
+    ifstream mapFile;
+    mapFile.open(noiseFile);
+    string line;
 
-	double lb, ub, median, sigma, probSalt, probPepper;
-	int numShadows;
-	char valSalt, valPepper;
+    double lb, ub, median, sigma, probSalt, probPepper;
+    int numShadows;
+    char valSalt, valPepper;
 
-	if(mapFile.is_open()){
-		while(!mapFile.eof()){
-			getline(mapFile, line);
-			char* tok = new char[line.size()];
-			strcpy(tok, line.c_str());
+    if(mapFile.is_open()){
+        while(!mapFile.eof()){
+            getline(mapFile, line);
+            char* tok = new char[line.size()];
+            strcpy(tok, line.c_str());
 
-			if(line.length() == 0)
-				continue;
+            if(line.length() == 0)
+                continue;
 
-			char * field = strtok(tok, ":");
+            char * field = strtok(tok, ":");
 
-			if(strcmp(field, "SHADOW") == 0){
+            if(strcmp(field, "SHADOW") == 0){
 
-				//apply shadow noise
-				numShadows = atoi(strtok(NULL, " "));
+                //apply shadow noise
+                numShadows = atoi(strtok(NULL, " "));
 
                 td->addShadows(numShadows);
 
-			} else if(strcmp(field, "GAUSSIAN") == 0){
+            } else if(strcmp(field, "GAUSSIAN") == 0){
 
-				//apply gaussian noise
-				median = atof(strtok(NULL, " "));
-				sigma = atof(strtok(NULL, " "));
+                //apply gaussian noise
+                median = atof(strtok(NULL, " "));
+                sigma = atof(strtok(NULL, " "));
 
-				td->addNoise_gaussian(median, sigma);
+                td->addNoise_gaussian(median, sigma);
 
-			} else if(strcmp(field, "UNIFORM") == 0){
+            } else if(strcmp(field, "UNIFORM") == 0){
 
-				//applying uniform noise
-				lb = atof(strtok(NULL, " "));
-				ub = atof(strtok(NULL, " "));
+                //applying uniform noise
+                lb = atof(strtok(NULL, " "));
+                ub = atof(strtok(NULL, " "));
 
                 td->addNoise_Uniform(lb, ub);
 
-			} else {
+            } else {
 
-				if (strcmp(field, "SALTPEPPER") == 0) {
+                if (strcmp(field, "SALTPEPPER") == 0) {
 
-					//apply salt and pepper noise
-					valSalt = (char)atoi(strtok(NULL, " "));
-					probSalt = atof(strtok(NULL, " "));
-					valPepper = (char)atoi(strtok(NULL, " "));
-					probPepper = atof(strtok(NULL, " "));
-					valPepper = (char)valPepper;
+                    //apply salt and pepper noise
+                    valSalt = (char)atoi(strtok(NULL, " "));
+                    probSalt = atof(strtok(NULL, " "));
+                    valPepper = (char)atoi(strtok(NULL, " "));
+                    probPepper = atof(strtok(NULL, " "));
+                    valPepper = (char)valPepper;
 
-					td->addNoise_saltPepper(valSalt, probSalt, valPepper, probPepper);
+                    td->addNoise_saltPepper(valSalt, probSalt, valPepper, probPepper);
 
-				}
+                }
 
-			}
-		}
+            }
+        }
 
     } else {
 
@@ -540,7 +585,7 @@ void applyNoise(TreeDrawer *td, const char* noiseFile){
 
     }
 
-	mapFile.close();
+    mapFile.close();
 }
 
 
@@ -548,34 +593,34 @@ void applyNoise(TreeDrawer *td, const char* noiseFile){
  * prints a node into XML/GXL format from the NodeTable
  */
 void subPrint_node(NodeTable *nt, int segment, ofstream &os){
-	os<<"  <node id=\"n"<<segment<<"\">"<<endl;
-	os<<"    <attr name=\" nodeType\">"<<endl;
-	if(nt->getType(segment) == NodeTable::ROOT){
-		os<<"      <string> root node </string>"<<endl;
-	} else if(nt->getType(segment) == NodeTable::TERM){
-		os<<"      <string> terminal node </string>"<<endl;
-	} else if(nt->getType(segment) == NodeTable::BIF){
-		os<<"      <string> bifurication </string>"<<endl;
-	} else {
-		os<<"      <string> unknown type </string>"<<endl;
-	}
-	os<<"    </attr>"<<endl;
+    os<<"  <node id=\"n"<<segment<<"\">"<<endl;
+    os<<"    <attr name=\" nodeType\">"<<endl;
+    if(nt->getType(segment) == NodeTable::ROOT){
+        os<<"      <string> root node </string>"<<endl;
+    } else if(nt->getType(segment) == NodeTable::TERM){
+        os<<"      <string> terminal node </string>"<<endl;
+    } else if(nt->getType(segment) == NodeTable::BIF){
+        os<<"      <string> bifurication </string>"<<endl;
+    } else {
+        os<<"      <string> unknown type </string>"<<endl;
+    }
+    os<<"    </attr>"<<endl;
 
-	os<<"    <attr name=\" position\">"<<endl;
-	os<<"      <tup>"<<endl;
-	double *pos = nt->getPos(segment);
-	os<<"        <float>"<<pos[0]<<"</float>"<<endl;
-	os<<"        <float>"<<pos[1]<<"</float>"<<endl;
-	os<<"        <float>"<<pos[2]<<"</float>"<<endl;
-	os<<"      </tup>"<<endl;
-	os<<"    </attr>"<<endl;
-	os<<"  </node>"<<endl;
+    os<<"    <attr name=\" position\">"<<endl;
+    os<<"      <tup>"<<endl;
+    double *pos = nt->getPos(segment);
+    os<<"        <float>"<<pos[0]<<"</float>"<<endl;
+    os<<"        <float>"<<pos[1]<<"</float>"<<endl;
+    os<<"        <float>"<<pos[2]<<"</float>"<<endl;
+    os<<"      </tup>"<<endl;
+    os<<"    </attr>"<<endl;
+    os<<"  </node>"<<endl;
 
-	if(nt->getType(segment) != NodeTable::TERM){
-		subPrint_node(nt, nt->getLeftChild(segment), os);
-		if(nt->getType(segment) != NodeTable::ROOT)
-			subPrint_node(nt, nt->getRightChild(segment), os);
-	}
+    if(nt->getType(segment) != NodeTable::TERM){
+        subPrint_node(nt, nt->getLeftChild(segment), os);
+        if(nt->getType(segment) != NodeTable::ROOT)
+            subPrint_node(nt, nt->getRightChild(segment), os);
+    }
 }
 
 /**
@@ -583,24 +628,24 @@ void subPrint_node(NodeTable *nt, int segment, ofstream &os){
  */
 void subPrint_edge(NodeTable *nt, int segment, ofstream &os){
 
-	if(nt->getType(segment) != NodeTable::ROOT){
-		os<<"  <edge id=\"e"<<segment<<"\" to=\"n"<<segment<<"\" from=\"n"<<nt->getParent(segment)<<"\">"<<endl;
-		os<<"    <attr name=\" flow\">"<<endl;
-		os<<"      <float>"<<nt->getFlow(segment)<<"</float>"<<endl;
-		os<<"    </attr>"<<endl;
+    if(nt->getType(segment) != NodeTable::ROOT){
+        os<<"  <edge id=\"e"<<segment<<"\" to=\"n"<<segment<<"\" from=\"n"<<nt->getParent(segment)<<"\">"<<endl;
+        os<<"    <attr name=\" flow\">"<<endl;
+        os<<"      <float>"<<nt->getFlow(segment)<<"</float>"<<endl;
+        os<<"    </attr>"<<endl;
 
-		os<<"    <attr name=\" radius\">"<<endl;
-		os<<"      <float>"<<nt->getRadius(segment)<<"</float>"<<endl;
-		os<<"    </attr>"<<endl;
+        os<<"    <attr name=\" radius\">"<<endl;
+        os<<"      <float>"<<nt->getRadius(segment)<<"</float>"<<endl;
+        os<<"    </attr>"<<endl;
 
-		os<<"  </edge>"<<endl;
-	}
+        os<<"  </edge>"<<endl;
+    }
 
-	if(nt->getType(segment) != NodeTable::TERM){
-		subPrint_edge(nt, nt->getLeftChild(segment), os);
-		if(nt->getType(segment) != NodeTable::ROOT)
-			subPrint_edge(nt, nt->getRightChild(segment), os);
-	}
+    if(nt->getType(segment) != NodeTable::TERM){
+        subPrint_edge(nt, nt->getLeftChild(segment), os);
+        if(nt->getType(segment) != NodeTable::ROOT)
+            subPrint_edge(nt, nt->getRightChild(segment), os);
+    }
 }
 
 /**
@@ -609,30 +654,30 @@ void subPrint_edge(NodeTable *nt, int segment, ofstream &os){
  */
 void printTreeStructure(VascularTree * vt, const char * filePath){
 
-	ofstream output;
+    ofstream output;
 
-	//writing the tree structure as GXL to the filePath specified
-	output.open(filePath);
-	output<<"<gxl><graph id=\""<<filePath<<"\" edgeids=\" true\" edgemode=\" directed\" hypergraph=\" false\">"<<endl;
+    //writing the tree structure as GXL to the filePath specified
+    output.open(filePath);
+    output<<"<gxl><graph id=\""<<filePath<<"\" edgeids=\" true\" edgemode=\" directed\" hypergraph=\" false\">"<<endl;
 
-	//this seems really really stupid to do, why would we
-	//loop through the entire structure to find the root, and then
-	//recursively the nodes and edges?
-	//TODO: fix this - should have the root always stored and easily
-	//accessible and then recursively output the node/edges
-	for(int i = 0; i < vt->nt.length; i++){
-		if(vt->nt.getType(i) == NodeTable::ROOT){
-			subPrint_node(&vt->nt, i, output);
-			subPrint_edge(&vt->nt, i, output);
-			output<<"</graph></gxl>"<<endl;
-			output.close();
-			return;
-		}
-	}
+    //this seems really really stupid to do, why would we
+    //loop through the entire structure to find the root, and then
+    //recursively the nodes and edges?
+    //TODO: fix this - should have the root always stored and easily
+    //accessible and then recursively output the node/edges
+    for(int i = 0; i < vt->nt.length; i++){
+        if(vt->nt.getType(i) == NodeTable::ROOT){
+            subPrint_node(&vt->nt, i, output);
+            subPrint_edge(&vt->nt, i, output);
+            output<<"</graph></gxl>"<<endl;
+            output.close();
+            return;
+        }
+    }
 
     output.close();
 
-	throw "Unable to find root node.  The GXL file has not been generated.";
+    throw "Unable to find root node.  The GXL file has not been generated.";
 
 }
 
@@ -651,12 +696,13 @@ void printTreeStructure(VascularTree * vt, const char * filePath){
  */
 int main(int argc, char** argv){
 
-	if (argc < 4) {
-		//not enough parameters specified
-		cout << "An error has occured: incorrect number of arguments" << endl;
-		cout << "Usage: VascuSynth [paramFile] [imageNameFile] [voxelWidth]" << endl;
-		return 0;
-	}
+    int numFixedArgs = 5;
+    if (argc < numFixedArgs) {
+        //not enough parameters specified
+        cout << "An error has occured: incorrect number of arguments" << endl;
+        cout << "Usage: VascuSynth [paramFile] [imageNameFile] [voxelWidth] [outputSize]" << endl;
+        return 0;
+    }
 
     try {
 
@@ -666,7 +712,8 @@ int main(int argc, char** argv){
 
         //voxel widths
         string voxelWidth = argv[3];
-        string *noiseFiles = new string[argc-4];
+        string outputSize = argv[4];
+        string *noiseFiles = new string[argc-numFixedArgs];
 
         int paramFilesSize = (int) paramFiles->size();
 
@@ -676,11 +723,11 @@ int main(int argc, char** argv){
             string paramFile = paramFiles->at(m);
             string rootDirectory = imageNameFiles->at(m);
 
-            for(int i = 4; i < argc; i++) {
-                noiseFiles[i-4] = argv[i];
+            for(int i = numFixedArgs; i < argc; i++) {
+                noiseFiles[i-numFixedArgs] = argv[i];
             }
 
-            int numNoise = argc-4;
+            int numNoise = argc-numFixedArgs;
 
             cout << "Reading parameters and building the tree..." << endl;
 
@@ -707,10 +754,11 @@ int main(int argc, char** argv){
 
             double corner1[] = {0,0,0};
             double corner2[] = {static_cast<double>(vt->oxMap->dim[0]),
-				static_cast<double>(vt->oxMap->dim[1]),
-				static_cast<double>(vt->oxMap->dim[2])};
+                static_cast<double>(vt->oxMap->dim[1]),
+                static_cast<double>(vt->oxMap->dim[2])};
 
-            TreeDrawer * td = drawTree(vt, corner1, corner2, atof(voxelWidth.c_str()));
+            double voxelWidthD = atof(voxelWidth.c_str());
+            TreeDrawer * td = drawTree(vt, corner1, corner2, voxelWidthD);
 
             //create the subdirectory for the images
             string imageName = rootDirectory+"/original_image";
@@ -718,7 +766,9 @@ int main(int argc, char** argv){
 
             //output the images
             imageName = imageName + "/image";
-            drawImage(td, imageName.c_str());
+            svec3 outputSizeVec(atoi(outputSize.c_str()));
+
+            drawImage(*vt, svec3(ivec3(vt->oxMap->dim)), outputSizeVec, voxelWidthD, imageName.c_str());
 
             cout << "The volumetric image has been saved..." << endl;
 
@@ -728,19 +778,19 @@ int main(int argc, char** argv){
                 cout << "The images are being degraded by noise..." << endl;
             }
 
-            //apply noise to the images - creating niose_images
-            for(int i = 0; i < numNoise; i++){
+            ////apply noise to the images - creating niose_images
+            //for(int i = 0; i < numNoise; i++){
 
-                TreeDrawer * td_c = td->copy();
-                applyNoise(td_c, noiseFiles[i].c_str());
+            //    TreeDrawer * td_c = td->copy();
+            //    applyNoise(td_c, noiseFiles[i].c_str());
 
-                string noiseImage = rootDirectory+"/noise_image_"+itoa(i, 10);
-                mmkdir(noiseImage.c_str());
+            //    string noiseImage = rootDirectory+"/noise_image_"+itoa(i, 10);
+            //    mmkdir(noiseImage.c_str());
 
-                noiseImage = noiseImage+"/image";
-                drawImage(td_c, noiseImage.c_str());
+            //    noiseImage = noiseImage+"/image";
+            //    drawImage(td_c, noiseImage.c_str());
 
-            }
+            //}
 
             if (numNoise > 0) {
                 cout << "Images have been succesfully degraded by noise and saved..." << endl;
@@ -757,6 +807,6 @@ int main(int argc, char** argv){
         cout << "Exiting VascuSynth" << endl;
     }
 
-	return 0;
+    return 0;
 }
 

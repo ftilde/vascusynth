@@ -1,5 +1,8 @@
 #include "H5Cpp.h"
-#include<vector>
+#include <memory>
+#include <vector>
+#include <iostream>
+#include <cmath>
 
 template<class T>
 struct TemplateVec3 {
@@ -9,10 +12,77 @@ struct TemplateVec3 {
     bool operator==(TemplateVec3<T> other) {
         return x == other.x && y == other.y && z == other.z;
     }
+
+    TemplateVec3<T> operator*(TemplateVec3<T> other) {
+        return { x * other.x, y * other.y, z * other.z};
+    }
+    TemplateVec3<T> operator*(T other) {
+        return { x * other, y * other, z * other};
+    }
+    TemplateVec3<T> operator-(TemplateVec3<T> other) {
+        return { x - other.x, y - other.y, z - other.z};
+    }
+    TemplateVec3<T> operator-(T other) {
+        return { x - other, y - other, z - other};
+    }
+    TemplateVec3<T> operator+(TemplateVec3<T> other) {
+        return { x + other.x, y + other.y, z + other.z};
+    }
+    TemplateVec3<T> operator+(T other) {
+        return { x + other, y + other, z + other};
+    }
+    TemplateVec3<T> operator/(TemplateVec3<T> other) {
+        return { x / other.x, y / other.y, z / other.z};
+    }
+    TemplateVec3<T> operator/(T other) {
+        return { x / other, y / other, z / other};
+    }
+
+    TemplateVec3<T> max(TemplateVec3<T> other) {
+        return { std::max(x, other.x), std::max(y, other.y), std::max(z, other.z), };
+    }
+
+    TemplateVec3<T> min(TemplateVec3<T> other) {
+        return { std::min(x, other.x), std::min(y, other.y), std::min(z, other.z), };
+    }
+
+    TemplateVec3<T> ceil() {
+        return { std::ceil(x), std::ceil(y), std::ceil(z), };
+    }
+
+    TemplateVec3<T> floor() {
+        return { std::floor(x), std::floor(y), std::floor(z), };
+    }
+    T hsum() {
+        return { x + y + z };
+    }
+
+    template<typename O>
+    TemplateVec3<T>(TemplateVec3<O> other)
+        : x(other.x)
+        , y(other.y)
+        , z(other.z)
+    {
+    }
+
+    TemplateVec3<T>(T* vals)
+        : x(vals[0])
+        , y(vals[1])
+        , z(vals[2])
+    {
+    }
+    TemplateVec3<T>(T v)
+        : x(v)
+        , y(v)
+        , z(v)
+    {
+    }
 };
 
 typedef TemplateVec3<size_t> svec3;
+typedef TemplateVec3<int> ivec3;
 typedef TemplateVec3<float> vec3;
+typedef TemplateVec3<double> dvec3;
 
 class HDF5WriteException : public std::exception {
 public:
@@ -30,7 +100,7 @@ protected:
 #define H5_STUPID_LOCATION_API_CHANGES
 #endif
 
-void writeVec3Attribute(
+static void writeVec3Attribute(
 #ifdef H5_STUPID_LOCATION_API_CHANGES
         const H5::H5Object& loc,
 #else
@@ -60,13 +130,13 @@ struct ByteVolume {
         , data(dim.x*dim.y*dim.z)
     { }
     svec3 dim;
-    std::vector<char> data;
+    std::vector<unsigned char> data;
 
     size_t data_index(svec3 pos) {
         return pos.x + dim.x * (pos.y + pos.z*dim.y);
     }
 
-    void set_voxel(svec3 pos, char val) {
+    void set_voxel(svec3 pos, unsigned char val) {
         data.at(data_index(pos)) = val;
     }
     char get_voxel(svec3 pos) {
@@ -74,17 +144,24 @@ struct ByteVolume {
     }
 };
 
-void write_hdf5_volume(const std::string& fileName, ByteVolume volume, float voxelsize, int deflateLevel=1)
-{
+struct HDF5Volume {
+    static HDF5Volume create(const std::string& fileName, svec3 size, float voxelsize, int deflateLevel=1);
+    void writeSlice(const ByteVolume& vol, size_t z);
+
+    std::unique_ptr<H5::DataSet> dataSet;
+    svec3 size;
+};
+H5::DataType HDF5_VOL_TYPE = H5::PredType::STD_U8LE;
+
+HDF5Volume HDF5Volume::create(const std::string& fileName, svec3 size, float voxelsize, int deflateLevel) {
     bool shuffle = false;
     svec3 chunkSize = svec3(0,0,0);
     bool truncateFile = true;
-    H5::DataType h5type = H5::PredType::STD_U8LE;
 
     hsize_t dimensions_hdf5[3];
-    dimensions_hdf5[0] = volume.dim.x;
-    dimensions_hdf5[1] = volume.dim.y;
-    dimensions_hdf5[2] = volume.dim.z;
+    dimensions_hdf5[0] = size.x;
+    dimensions_hdf5[1] = size.y;
+    dimensions_hdf5[2] = size.z;
     // Open the file ======================================================================================
     std::unique_ptr<H5::H5File> file = nullptr;
 
@@ -149,8 +226,8 @@ void write_hdf5_volume(const std::string& fileName, ByteVolume volume, float vox
         // ... Set the chunk size to be an xy-slice of the volume manually, if
         // none was specified.
         if(chunkSize == svec3(0,0,0)) {
-            chunkSize.x = volume.dim.x;
-            chunkSize.y = volume.dim.y;
+            chunkSize.x = size.x;
+            chunkSize.y = size.y;
             chunkSize.z = 1;
         }
         // ... And set the chunk size of the previously created property list.
@@ -168,10 +245,21 @@ void write_hdf5_volume(const std::string& fileName, ByteVolume volume, float vox
         }
 
         // Finally try to create the data set inside the file
-        dataSet = std::unique_ptr<H5::DataSet>(new H5::DataSet(file->createDataSet("/vol", h5type, dataSpace, propList)));
+        dataSet = std::unique_ptr<H5::DataSet>(new H5::DataSet(file->createDataSet("/vol", HDF5_VOL_TYPE, dataSpace, propList)));
     } catch(H5::Exception error) {
         throw HDF5WriteException("Error constructing dataset:" + error.getFuncName() + ": " + error.getDetailMsg());
     }
+    //Write metadata to dataSet
+    float voxelSizeUm = voxelsize*1000;
+    writeVec3Attribute(*dataSet, "element_size_um", vec3(voxelSizeUm, voxelSizeUm, voxelSizeUm));
+
+    return HDF5Volume {
+        std::move(dataSet),
+        size,
+    };
+}
+
+void HDF5Volume::writeSlice(const ByteVolume& vol, size_t z) {
 
     //Write data to dataset
     const size_t numChannels = 1;
@@ -184,7 +272,12 @@ void write_hdf5_volume(const std::string& fileName, ByteVolume volume, float vox
         hsize_t start[3];
         start[0] = 0;
         start[1] = 0;
-        start[2] = 0;
+        start[2] = z;
+
+        hsize_t dimensions_hdf5[3];
+        dimensions_hdf5[0] = vol.dim.x;
+        dimensions_hdf5[1] = vol.dim.y;
+        dimensions_hdf5[2] = vol.dim.z;
 
         H5::DataSpace fileSpace(dataSet->getSpace());
         fileSpace.selectHyperslab(H5S_SELECT_SET, dimensions_hdf5, start);
@@ -193,14 +286,11 @@ void write_hdf5_volume(const std::string& fileName, ByteVolume volume, float vox
         H5::DataSpace memSpace(3, dimensions_hdf5);
 
         //Write the volume to disk.
-        dataSet->write(volume.data.data(), h5type, memSpace, fileSpace);
+        dataSet->write(vol.data.data(), HDF5_VOL_TYPE, memSpace, fileSpace);
 
     } catch(H5::Exception error) { // catch HDF5 exceptions
         std::cout << error.getFuncName() << ": " << error.getDetailMsg() << std::endl;
-        throw HDF5WriteException("An Error occured while writing volume to file " + fileName);
+        throw HDF5WriteException("An Error occured while writing volume to file");
     }
-    //Write metadata to dataSet
-    float voxelSizeUm = voxelsize*1000;
-    writeVec3Attribute(*dataSet, "element_size_um", vec3(voxelSizeUm, voxelSizeUm, voxelSizeUm));
 }
 
