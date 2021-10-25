@@ -392,12 +392,36 @@ static bool inSegment(vec3 point, vec3 p1, vec3 p2, float radius){
     }
 }
 
+struct NoNoise {
+    unsigned char apply(unsigned char val) {
+        return val;
+    }
+    const static int deflateLevel = 1;
+};
+
+struct GaussianNoise {
+    double median;
+    double sigma;
+    MTRand rand;
+    unsigned char apply(unsigned char c) {
+        int x = c + (int)(rand.randNorm(median, sigma));
+        if(x > 255) {
+            return (unsigned char)255;
+        } else if(x < 0) {
+            return (unsigned char)0;
+        } else {
+            return (unsigned char) x;
+        }
+    }
+    const static int deflateLevel = 0;
+};
 
 /**
  * draws the tree from the TreeDrawer into a volumetric 3D
  * image as a series of 2D png slices
  */
-void drawImage(VascularTree& td, svec3 mapSize, svec3 size, float voxelWidth, const char* rootName){
+template<typename Noise>
+void drawImage(VascularTree& td, svec3 mapSize, svec3 size, float voxelWidth, const char* rootName, Noise noise){
 
     // VascularTree components are apparently in "physical" coordinates (with
     // applied spacing, but no offset). So in order to go from normalized
@@ -409,7 +433,7 @@ void drawImage(VascularTree& td, svec3 mapSize, svec3 size, float voxelWidth, co
     vec3 sampleToVT = normalizedToVT * sampleToNormalized;
     vec3 vtToSample = vec3(1.0) / sampleToVT;
 
-    auto vol = HDF5Volume::create(std::string(rootName) + ".h5", size, voxelWidth);
+    auto vol = HDF5Volume::create(std::string(rootName) + ".h5", size, voxelWidth, Noise::deflateLevel);
 
     NodeTable& nt = td.nt;
     size_t numNodes = nt.nodes.size();
@@ -483,14 +507,15 @@ void drawImage(VascularTree& td, svec3 mapSize, svec3 size, float voxelWidth, co
                 vec3 imagePos(x, y, z);
                 vec3 treePos = sampleToVT * imagePos;
 
-                unsigned char val = 0;
+                unsigned char val = 96;
                 for(auto it = cylinderIt.next(); it != cylinderIt.end(); it = cylinderIt.next()) {
                     auto& i = it->value;
                     auto& c = cylinders[i];
                     if(inSegment(treePos, c.p1, c.p2, c.radius)) {
-                        val = 255;
+                        val = 160;
                     }
                 }
+                val = noise.apply(val);
 
                 //char val = td->imageAt(i, j, k);
                 svec3 slicePos(x,y,0);
@@ -517,8 +542,7 @@ void drawImage(VascularTree& td, svec3 mapSize, svec3 size, float voxelWidth, co
  *
  * one image for each noise file will be generated
  */
-void applyNoise(TreeDrawer *td, const char* noiseFile){
-
+void drawWithNoise(VascularTree& td, svec3 mapSize, svec3 size, float voxelWidth, const char* rootName, const char* noiseFile) {
     ifstream mapFile;
     mapFile.open(noiseFile);
     string line;
@@ -526,6 +550,7 @@ void applyNoise(TreeDrawer *td, const char* noiseFile){
     double lb, ub, median, sigma, probSalt, probPepper;
     int numShadows;
     char valSalt, valPepper;
+    bool first = true;
 
     if(mapFile.is_open()){
         while(!mapFile.eof()){
@@ -537,13 +562,16 @@ void applyNoise(TreeDrawer *td, const char* noiseFile){
                 continue;
 
             char * field = strtok(tok, ":");
+            if(!first) {
+                throw "Sorry, combining multiple noise types supported in this fork";
+            }
 
             if(strcmp(field, "SHADOW") == 0){
 
                 //apply shadow noise
                 numShadows = atoi(strtok(NULL, " "));
 
-                td->addShadows(numShadows);
+                throw "Sorry, shadow is not yet supported in this fork";
 
             } else if(strcmp(field, "GAUSSIAN") == 0){
 
@@ -551,15 +579,14 @@ void applyNoise(TreeDrawer *td, const char* noiseFile){
                 median = atof(strtok(NULL, " "));
                 sigma = atof(strtok(NULL, " "));
 
-                td->addNoise_gaussian(median, sigma);
-
+                drawImage(td, mapSize, size, voxelWidth, rootName, GaussianNoise { median, sigma });
             } else if(strcmp(field, "UNIFORM") == 0){
 
                 //applying uniform noise
                 lb = atof(strtok(NULL, " "));
                 ub = atof(strtok(NULL, " "));
 
-                td->addNoise_Uniform(lb, ub);
+                throw "Sorry, uniform noise is not yet supported in this fork";
 
             } else {
 
@@ -572,11 +599,10 @@ void applyNoise(TreeDrawer *td, const char* noiseFile){
                     probPepper = atof(strtok(NULL, " "));
                     valPepper = (char)valPepper;
 
-                    td->addNoise_saltPepper(valSalt, probSalt, valPepper, probPepper);
-
+                    throw "Sorry, salt and pepper noise is not yet supported in this fork";
                 }
-
             }
+            first = false;
         }
 
     } else {
@@ -587,7 +613,6 @@ void applyNoise(TreeDrawer *td, const char* noiseFile){
 
     mapFile.close();
 }
-
 
 /**
  * prints a node into XML/GXL format from the NodeTable
@@ -762,7 +787,7 @@ int main(int argc, char** argv){
             imageName = imageName + "/image";
             svec3 outputSizeVec(atoi(outputSize.c_str()));
 
-            drawImage(*vt, svec3(ivec3(vt->oxMap->dim)), outputSizeVec, voxelWidthD, imageName.c_str());
+            drawImage(*vt, svec3(ivec3(vt->oxMap->dim)), outputSizeVec, voxelWidthD, imageName.c_str(), NoNoise{});
 
             cout << "The volumetric image has been saved..." << endl;
 
@@ -770,19 +795,14 @@ int main(int argc, char** argv){
                 cout << "The images are being degraded by noise..." << endl;
             }
 
-            ////apply noise to the images - creating niose_images
-            //for(int i = 0; i < numNoise; i++){
+            //apply noise to the images - creating niose_images
+            for(int i = 0; i < numNoise; i++){
+                string noiseImage = rootDirectory+"/noise_image_"+itoa(i, 10);
+                mmkdir(noiseImage.c_str());
 
-            //    TreeDrawer * td_c = td->copy();
-            //    applyNoise(td_c, noiseFiles[i].c_str());
-
-            //    string noiseImage = rootDirectory+"/noise_image_"+itoa(i, 10);
-            //    mmkdir(noiseImage.c_str());
-
-            //    noiseImage = noiseImage+"/image";
-            //    drawImage(td_c, noiseImage.c_str());
-
-            //}
+                noiseImage = noiseImage+"/image";
+                drawWithNoise(*vt, svec3(ivec3(vt->oxMap->dim)), outputSizeVec, voxelWidthD, noiseImage.c_str(), noiseFiles[i].c_str());
+            }
 
             if (numNoise > 0) {
                 cout << "Images have been succesfully degraded by noise and saved..." << endl;
