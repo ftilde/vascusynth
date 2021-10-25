@@ -752,13 +752,7 @@ int main(int argc, char** argv){
             cout << "The directory for the image has been created..." << endl;
             cout << "Information about the vascular structure has been saved in the gxl file tree_structure.xml..." << endl;
 
-            double corner1[] = {0,0,0};
-            double corner2[] = {static_cast<double>(vt->oxMap->dim[0]),
-                static_cast<double>(vt->oxMap->dim[1]),
-                static_cast<double>(vt->oxMap->dim[2])};
-
             double voxelWidthD = atof(voxelWidth.c_str());
-            TreeDrawer * td = drawTree(vt, corner1, corner2, voxelWidthD);
 
             //create the subdirectory for the images
             string imageName = rootDirectory+"/original_image";
@@ -771,8 +765,6 @@ int main(int argc, char** argv){
             drawImage(*vt, svec3(ivec3(vt->oxMap->dim)), outputSizeVec, voxelWidthD, imageName.c_str());
 
             cout << "The volumetric image has been saved..." << endl;
-
-            char *buff = new char[20];
 
             if (numNoise > 0) {
                 cout << "The images are being degraded by noise..." << endl;
@@ -797,8 +789,6 @@ int main(int argc, char** argv){
             }
 
             //clean up
-            delete[] buff;
-            delete td;
             delete vt;
         }
 
