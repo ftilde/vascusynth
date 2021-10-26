@@ -504,16 +504,36 @@ void drawImage(VascularTree& td, svec3 mapSize, svec3 size, float voxelWidth, co
             for(int x = 0 ; x < size.x; x++){
                 auto cylinderIt = xWalker.next();
 
-                vec3 imagePos(x, y, z);
-                vec3 treePos = sampleToVT * imagePos;
+                const vec3 offsets[8] {
+                    vec3(-0.25, -0.25, -0.25),
+                    vec3( 0.25, -0.25, -0.25),
+                    vec3(-0.25,  0.25, -0.25),
+                    vec3( 0.25,  0.25, -0.25),
+                    vec3(-0.25, -0.25,  0.25),
+                    vec3( 0.25, -0.25,  0.25),
+                    vec3(-0.25,  0.25,  0.25),
+                    vec3( 0.25,  0.25,  0.25),
+                };
+                const unsigned char outsideBase = 96;
+                const unsigned char insideBase = 160;
+                const unsigned char insideIncrement = (insideBase-outsideBase)/8;
 
-                unsigned char val = 96;
+                unsigned char val = outsideBase;
                 for(auto it = cylinderIt.next(); it != cylinderIt.end(); it = cylinderIt.next()) {
                     auto& i = it->value;
                     auto& c = cylinders[i];
-                    if(inSegment(treePos, c.p1, c.p2, c.radius)) {
-                        val = 160;
+
+                    vec3 imagePos(x, y, z);
+
+                    unsigned char v = outsideBase;
+                    for(auto& offset : offsets) {
+                        vec3 subVoxelPos = imagePos + offset;
+                        vec3 treePos = sampleToVT * subVoxelPos;
+                        if(inSegment(treePos, c.p1, c.p2, c.radius)) {
+                            v += insideIncrement;
+                        }
                     }
+                    val = std::max(v, val);
                 }
                 val = noise.apply(val);
 
