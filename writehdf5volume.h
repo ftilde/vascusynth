@@ -109,9 +109,9 @@ static void writeVec3Attribute(
         const H5std_string& name, const vec3& vec) {
     // Convert tgt vector to hdf style
     float h5vec[3];
-    h5vec[0] = vec.x;
-    h5vec[1] = vec.x;
     h5vec[2] = vec.x;
+    h5vec[1] = vec.y;
+    h5vec[0] = vec.z;
 
     H5::DataType h5type = H5::PredType::IEEE_F32LE;
 
@@ -159,9 +159,9 @@ HDF5Volume HDF5Volume::create(const std::string& fileName, svec3 size, float vox
     bool truncateFile = true;
 
     hsize_t dimensions_hdf5[3];
-    dimensions_hdf5[0] = size.x;
+    dimensions_hdf5[2] = size.x;
     dimensions_hdf5[1] = size.y;
-    dimensions_hdf5[2] = size.z;
+    dimensions_hdf5[0] = size.z;
     // Open the file ======================================================================================
     std::unique_ptr<H5::H5File> file = nullptr;
 
@@ -233,9 +233,9 @@ HDF5Volume HDF5Volume::create(const std::string& fileName, svec3 size, float vox
         // ... And set the chunk size of the previously created property list.
         hsize_t chunkdimHDF5[3];
         // If we have a multidimensionale Volume, we definitely want the channels separated
-        chunkdimHDF5[0] = chunkSize.x;
+        chunkdimHDF5[2] = chunkSize.x;
         chunkdimHDF5[1] = chunkSize.y;
-        chunkdimHDF5[2] = chunkSize.z;
+        chunkdimHDF5[0] = chunkSize.z;
         propList.setChunk(3, chunkdimHDF5);
 
         // Set compression level
@@ -262,22 +262,16 @@ HDF5Volume HDF5Volume::create(const std::string& fileName, svec3 size, float vox
 void HDF5Volume::writeSlice(const ByteVolume& vol, size_t z) {
 
     //Write data to dataset
-    const size_t numChannels = 1;
-
     try {
-        //Select the hyperslab (Brick + fourth dimension)
-
-        //Just in case there are more than one channel: Allocate 4 dimensions.
-        //If there is only one channel the 4. dimension will not do anything.
         hsize_t start[3];
-        start[0] = 0;
+        start[2] = 0;
         start[1] = 0;
-        start[2] = z;
+        start[0] = z;
 
         hsize_t dimensions_hdf5[3];
-        dimensions_hdf5[0] = vol.dim.x;
+        dimensions_hdf5[2] = vol.dim.x;
         dimensions_hdf5[1] = vol.dim.y;
-        dimensions_hdf5[2] = vol.dim.z;
+        dimensions_hdf5[0] = vol.dim.z;
 
         H5::DataSpace fileSpace(dataSet->getSpace());
         fileSpace.selectHyperslab(H5S_SELECT_SET, dimensions_hdf5, start);
