@@ -67,6 +67,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <iostream>
 #include <cstring>
 #include <algorithm>
+#include <chrono>
 
 using namespace std;
 
@@ -819,6 +820,9 @@ void printTreeStructure(VascularTree * vt, const char * filePath){
 
 }
 
+typedef std::chrono::steady_clock Clock;
+typedef std::chrono::time_point<Clock> TimePoint;
+
 
 /**
  * VascuSynth: takes a series of parameter files, image names and (optionally) noise files
@@ -870,9 +874,11 @@ int main(int argc, char** argv){
             cout << "Reading parameters and building the tree..." << endl;
 
             //build the tree
+            TimePoint treeStart = Clock::now();
             VascularTree * vt = buildTree(paramFile.c_str());
 
-            cout << "The vascular tree has been built sucessfully..." << endl;
+            auto treeMillis = std::chrono::duration_cast<std::chrono::seconds>(Clock::now() - treeStart);
+            cout << "The vascular tree has been built sucessfully in " << treeMillis.count() << "s" << endl;
 
             //filter out the /r that appears at times and messes up the directory name
             if (rootDirectory[ rootDirectory.length() - 1 ] == '\r') {
@@ -900,9 +906,11 @@ int main(int argc, char** argv){
             imageName = imageName + "/image";
             svec3 outputSizeVec(atoi(outputSize.c_str()));
 
+            TimePoint imageStart = Clock::now();
             drawImage(*vt, svec3(ivec3(vt->oxMap->dim)), outputSizeVec, voxelWidthD, imageName.c_str(), NoNoise{}, std::vector<Shadow>());
 
-            cout << "The volumetric image has been saved..." << endl;
+            auto imageMillis = std::chrono::duration_cast<std::chrono::seconds>(Clock::now() - imageStart);
+            cout << "The volumetric image has been generated in " << imageMillis.count() << "s" << endl;
 
             if (numNoise > 0) {
                 cout << "The images are being degraded by noise..." << endl;
@@ -914,7 +922,10 @@ int main(int argc, char** argv){
                 mmkdir(noiseImage.c_str());
 
                 noiseImage = noiseImage+"/image";
+                TimePoint noiseStart = Clock::now();
                 drawWithNoise(*vt, svec3(ivec3(vt->oxMap->dim)), outputSizeVec, voxelWidthD, noiseImage.c_str(), noiseFiles[i].c_str());
+                auto noiseMillis = std::chrono::duration_cast<std::chrono::seconds>(Clock::now() - noiseStart);
+                cout << "The noisy image has been generated in " << noiseMillis.count() << "s" << endl;
             }
 
             if (numNoise > 0) {
