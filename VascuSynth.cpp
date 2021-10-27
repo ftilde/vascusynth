@@ -416,12 +416,20 @@ struct GaussianNoise {
     const static int deflateLevel = 0;
 };
 
+struct Shadow {
+    vec3 pos;
+    svec3 llf;
+    svec3 urb;
+    float reduction;
+    float radius;
+};
+
 /**
  * draws the tree from the TreeDrawer into a volumetric 3D
  * image as a series of 2D png slices
  */
 template<typename Noise>
-void drawImage(VascularTree& td, svec3 mapSize, svec3 size, float voxelWidth, const char* rootName, Noise noise){
+void drawImage(VascularTree& td, svec3 mapSize, svec3 size, float voxelWidth, const char* rootName, Noise noise, const std::vector<Shadow>& shadows) {
 
     // VascularTree components are apparently in "physical" coordinates (with
     // applied spacing, but no offset). So in order to go from normalized
@@ -438,16 +446,16 @@ void drawImage(VascularTree& td, svec3 mapSize, svec3 size, float voxelWidth, co
     NodeTable& nt = td.nt;
     size_t numNodes = nt.nodes.size();
 
-    std::vector<Interval<int, size_t>> cylinderIntervals;
+    std::vector<Interval<int, size_t>> segmentIntervals;
 
-    struct Cylinder {
+    struct Segment {
         vec3 p1;
         vec3 p2;
         float radius;
         svec3 llf;
         svec3 urb;
     };
-    std::vector<Cylinder> cylinders;
+    std::vector<Segment> segments;
     for(int i = 1; i < numNodes; i++){
         dvec3 p1(nt.getPos(i));
         int parent = nt.getParent(i);
@@ -457,7 +465,7 @@ void drawImage(VascularTree& td, svec3 mapSize, svec3 size, float voxelWidth, co
         svec3 llf = (vtToSample*(p1.min(p2) - vec3(radius))).floor().max(vec3(0.0));
         svec3 urb = (vtToSample*(p1.max(p2) + vec3(radius))).ceil();
 
-        cylinders.push_back(Cylinder {
+        segments.push_back(Segment {
             p1,
             p2,
             radius,
@@ -466,43 +474,77 @@ void drawImage(VascularTree& td, svec3 mapSize, svec3 size, float voxelWidth, co
         });
     }
 
-    size_t numCylinders = cylinders.size();
-    std::vector<Interval<int, size_t>> zIntervals;
-    for(int i = 0; i < numCylinders; ++i) {
-        auto& c = cylinders[i];
-        zIntervals.emplace_back(
+    size_t numSegments = segments.size();
+    std::vector<Interval<int, size_t>> zIntervalsSegments;
+    for(int i = 0; i < numSegments; ++i) {
+        auto& c = segments[i];
+        zIntervalsSegments.emplace_back(
                     c.llf.z,
                     c.urb.z,
                     i);
     }
-    IntervalWalker<int, size_t> zWalker(0, std::move(zIntervals));
+    IntervalWalker<int, size_t> zWalkerSegments(0, std::move(zIntervalsSegments));
+
+    std::vector<Interval<int, size_t>> zIntervalsShadows;
+    size_t numShadows = shadows.size();
+    for(int i = 0; i < numShadows; ++i) {
+        auto& s = shadows[i];
+        zIntervalsShadows.emplace_back(
+                    s.llf.z,
+                    s.urb.z,
+                    i);
+    }
+    IntervalWalker<int, size_t> zWalkerShadows(0, std::move(zIntervalsShadows));
 
     svec3 sliceDim { size.x, size.y, 1 };
     for(int z = 0; z < size.z; z++){
         ByteVolume slice(sliceDim);
 
-        auto cylinderIt = zWalker.next();
-        std::vector<Interval<int, size_t>> yIntervals;
-        for(auto it = cylinderIt.next(); it != cylinderIt.end(); it = cylinderIt.next()) {
+        auto segmentIt = zWalkerSegments.next();
+        std::vector<Interval<int, size_t>> yIntervalsSegments;
+        for(auto it = segmentIt.next(); it != segmentIt.end(); it = segmentIt.next()) {
             auto& i = it->value;
-            auto& c = cylinders[i];
-            yIntervals.emplace_back(c.llf.y, c.urb.y, i);
+            auto& c = segments[i];
+            yIntervalsSegments.emplace_back(c.llf.y, c.urb.y, i);
         }
-        IntervalWalker<int, size_t> yWalker(0, std::move(yIntervals));
+        IntervalWalker<int, size_t> yWalkerSegments(0, std::move(yIntervalsSegments));
+
+        auto shadowIt = zWalkerShadows.next();
+        std::vector<Interval<int, size_t>> yIntervalsShadows;
+        for(auto it = shadowIt.next(); it != shadowIt.end(); it = shadowIt.next()) {
+            auto& i = it->value;
+            auto& s = shadows[i];
+            yIntervalsShadows.emplace_back(s.llf.y, s.urb.y, i);
+        }
+        IntervalWalker<int, size_t> yWalkerShadows(0, std::move(yIntervalsShadows));
 
         for(int y = 0; y < size.y; y++){
 
-            auto cylinderIt = yWalker.next();
-            std::vector<Interval<int, size_t>> xIntervals;
-            for(auto it = cylinderIt.next(); it != cylinderIt.end(); it = cylinderIt.next()) {
+            auto segmentIt = yWalkerSegments.next();
+            std::vector<Interval<int, size_t>> xIntervalsSegments;
+            for(auto it = segmentIt.next(); it != segmentIt.end(); it = segmentIt.next()) {
                 auto& i = it->value;
-                auto& c = cylinders[i];
-                xIntervals.emplace_back(c.llf.x, c.urb.x, i);
+                auto& c = segments[i];
+                xIntervalsSegments.emplace_back(c.llf.x, c.urb.x, i);
             }
-            IntervalWalker<int, size_t> xWalker(0, std::move(xIntervals));
+            IntervalWalker<int, size_t> xWalkerSegments(0, std::move(xIntervalsSegments));
+
+            auto shadowIt = yWalkerShadows.next();
+            std::vector<Interval<int, size_t>> xIntervalsShadows;
+            for(auto it = shadowIt.next(); it != shadowIt.end(); it = shadowIt.next()) {
+                auto& i = it->value;
+                auto& s = shadows[i];
+                xIntervalsShadows.emplace_back(s.llf.x, s.urb.x, i);
+            }
+            IntervalWalker<int, size_t> xWalkerShadows(0, std::move(xIntervalsShadows));
 
             for(int x = 0 ; x < size.x; x++){
-                auto cylinderIt = xWalker.next();
+
+                const unsigned char outsideBase = 96;
+                const unsigned char insideBase = 160;
+                const unsigned char insideIncrement = (insideBase-outsideBase)/8;
+
+                vec3 imagePos(x, y, z);
 
                 const vec3 offsets[8] {
                     vec3(-0.25, -0.25, -0.25),
@@ -514,16 +556,13 @@ void drawImage(VascularTree& td, svec3 mapSize, svec3 size, float voxelWidth, co
                     vec3(-0.25,  0.25,  0.25),
                     vec3( 0.25,  0.25,  0.25),
                 };
-                const unsigned char outsideBase = 96;
-                const unsigned char insideBase = 160;
-                const unsigned char insideIncrement = (insideBase-outsideBase)/8;
 
                 unsigned char val = outsideBase;
-                for(auto it = cylinderIt.next(); it != cylinderIt.end(); it = cylinderIt.next()) {
+                auto segmentIt = xWalkerSegments.next();
+                for(auto it = segmentIt.next(); it != segmentIt.end(); it = segmentIt.next()) {
                     auto& i = it->value;
-                    auto& c = cylinders[i];
+                    auto& c = segments[i];
 
-                    vec3 imagePos(x, y, z);
 
                     unsigned char v = outsideBase;
                     for(auto& offset : offsets) {
@@ -534,6 +573,24 @@ void drawImage(VascularTree& td, svec3 mapSize, svec3 size, float voxelWidth, co
                         }
                     }
                     val = std::max(v, val);
+                }
+
+                vec3 treePos = sampleToVT * imagePos;
+                auto shadowIt = xWalkerShadows.next();
+                for(auto it = shadowIt.next(); it != shadowIt.end(); it = shadowIt.next()) {
+                    auto& i = it->value;
+                    auto& s = shadows[i];
+
+
+                    vec3 pDiff = (treePos - s.pos);
+                    float dist = std::sqrt((pDiff*pDiff).hsum());
+                    dist = std::min(dist, s.radius);
+
+                    float attenuation = dist/s.radius;
+                    float diff = val - outsideBase;
+                    diff *= attenuation;
+
+                    val = outsideBase + static_cast<unsigned char>(std::round(diff));
                 }
                 val = noise.apply(val);
 
@@ -562,15 +619,18 @@ void drawImage(VascularTree& td, svec3 mapSize, svec3 size, float voxelWidth, co
  *
  * one image for each noise file will be generated
  */
-void drawWithNoise(VascularTree& td, svec3 mapSize, svec3 size, float voxelWidth, const char* rootName, const char* noiseFile) {
+void drawWithNoise(VascularTree& vt, svec3 mapSize, svec3 size, float voxelWidth, const char* rootName, const char* noiseFile) {
     ifstream mapFile;
     mapFile.open(noiseFile);
     string line;
 
     double lb, ub, median, sigma, probSalt, probPepper;
-    int numShadows;
+    int numShadows = 0;
+
+    bool shadowsSet = false;
+    bool gaussianSet = false;
+
     char valSalt, valPepper;
-    bool first = true;
 
     if(mapFile.is_open()){
         while(!mapFile.eof()){
@@ -582,24 +642,26 @@ void drawWithNoise(VascularTree& td, svec3 mapSize, svec3 size, float voxelWidth
                 continue;
 
             char * field = strtok(tok, ":");
-            if(!first) {
-                throw "Sorry, combining multiple noise types supported in this fork";
-            }
 
             if(strcmp(field, "SHADOW") == 0){
 
                 //apply shadow noise
+                if(shadowsSet) {
+                    throw "Number of shadows already set previously";
+                }
+                shadowsSet = true;
                 numShadows = atoi(strtok(NULL, " "));
-
-                throw "Sorry, shadow is not yet supported in this fork";
-
             } else if(strcmp(field, "GAUSSIAN") == 0){
+
+                if(gaussianSet) {
+                    throw "Gaussian noise already set previously";
+                }
+                gaussianSet = true;
 
                 //apply gaussian noise
                 median = atof(strtok(NULL, " "));
                 sigma = atof(strtok(NULL, " "));
 
-                drawImage(td, mapSize, size, voxelWidth, rootName, GaussianNoise { median, sigma });
             } else if(strcmp(field, "UNIFORM") == 0){
 
                 //applying uniform noise
@@ -622,8 +684,39 @@ void drawWithNoise(VascularTree& td, svec3 mapSize, svec3 size, float voxelWidth
                     throw "Sorry, salt and pepper noise is not yet supported in this fork";
                 }
             }
-            first = false;
         }
+        vec3 normalizedToVT = vec3(mapSize);
+
+        vec3 sampleToNormalized = vec3(1.0) / vec3(size);
+
+        vec3 sampleToVT = normalizedToVT * sampleToNormalized;
+        vec3 vtToSample = vec3(1.0) / sampleToVT;
+
+        std::vector<Shadow> shadows;
+        MTRand rand;
+        for(int i = 0; i < numShadows; i++) {
+
+            NodeTable& nt = vt.nt;
+            int segment = (int)(rand.rand()*(nt.nodes.size()-1))+1;
+            dvec3 p1(nt.getPos(segment));
+            dvec3 p2(nt.getPos(nt.getParent(segment)));
+
+            vec3 diff = p2 - p1;
+            float length = sqrt((diff*diff).hsum());
+
+            float strength = rand.rand();
+            svec3 llf = (vtToSample*(p1.min(p2) - vec3(length))).floor().max(vec3(0.0));
+            svec3 urb = (vtToSample*(p1.max(p2) + vec3(length))).ceil();
+            shadows.push_back(Shadow{
+                p1 + diff * 0.5,
+                llf,
+                urb,
+                strength,
+                length,
+            });
+        }
+
+        drawImage(vt, mapSize, size, voxelWidth, rootName, GaussianNoise { median, sigma }, shadows);
 
     } else {
 
@@ -807,7 +900,7 @@ int main(int argc, char** argv){
             imageName = imageName + "/image";
             svec3 outputSizeVec(atoi(outputSize.c_str()));
 
-            drawImage(*vt, svec3(ivec3(vt->oxMap->dim)), outputSizeVec, voxelWidthD, imageName.c_str(), NoNoise{});
+            drawImage(*vt, svec3(ivec3(vt->oxMap->dim)), outputSizeVec, voxelWidthD, imageName.c_str(), NoNoise{}, std::vector<Shadow>());
 
             cout << "The volumetric image has been saved..." << endl;
 
