@@ -574,6 +574,7 @@ void VascularTree::buildTree(){
 		if(connectCandidate(cand, 20)){
 			count++;
 			oxMap->applyCandidate(term);
+			std::cout << "Placed node " << count << " of " << numNodes << std::endl;
 		}
 		
 	}

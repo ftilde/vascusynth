@@ -56,6 +56,9 @@ struct TemplateVec3 {
     T hsum() {
         return { x + y + z };
     }
+    T hmul() {
+        return { x * y * z };
+    }
 
     template<typename O>
     TemplateVec3<T>(TemplateVec3<O> other)

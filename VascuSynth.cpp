@@ -457,6 +457,7 @@ void drawImage(VascularTree& td, svec3 mapSize, svec3 size, float voxelWidth, co
         svec3 urb;
     };
     std::vector<Segment> segments;
+    size_t totalVolume = 0;
     for(int i = 1; i < numNodes; i++){
         dvec3 p1(nt.getPos(i));
         int parent = nt.getParent(i);
@@ -466,6 +467,7 @@ void drawImage(VascularTree& td, svec3 mapSize, svec3 size, float voxelWidth, co
         svec3 llf = (vtToSample*(p1.min(p2) - vec3(radius))).floor().max(vec3(0.0));
         svec3 urb = (vtToSample*(p1.max(p2) + vec3(radius))).ceil();
 
+        totalVolume += (urb-llf).hmul();
         segments.push_back(Segment {
             p1,
             p2,
@@ -474,6 +476,10 @@ void drawImage(VascularTree& td, svec3 mapSize, svec3 size, float voxelWidth, co
             urb,
         });
     }
+    size_t numVoxels = size.hmul();
+    std::cout << "Info: Total bounding box volume of vessel segments: " << totalVolume << " voxels." << std::endl;
+    std::cout << "Info: Voxels in volume: " << numVoxels << std::endl;
+    std::cout << "Info: Relative component volume: " << static_cast<float>(totalVolume)/numVoxels << std::endl;
 
     size_t numSegments = segments.size();
     std::vector<Interval<int, size_t>> zIntervalsSegments;
