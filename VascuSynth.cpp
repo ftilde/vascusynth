@@ -654,14 +654,14 @@ void drawWithNoise(VascularTree& vt, svec3 mapSize, svec3 size, float voxelWidth
 
                 //apply shadow noise
                 if(shadowsSet) {
-                    throw "Number of shadows already set previously";
+                    throw std::invalid_argument("Number of shadows already set previously");
                 }
                 shadowsSet = true;
                 numShadows = atoi(strtok(NULL, " "));
             } else if(strcmp(field, "GAUSSIAN") == 0){
 
                 if(gaussianSet) {
-                    throw "Gaussian noise already set previously";
+                    throw std::invalid_argument("Gaussian noise already set previously");
                 }
                 gaussianSet = true;
 
@@ -675,7 +675,7 @@ void drawWithNoise(VascularTree& vt, svec3 mapSize, svec3 size, float voxelWidth
                 lb = atof(strtok(NULL, " "));
                 ub = atof(strtok(NULL, " "));
 
-                throw "Sorry, uniform noise is not yet supported in this fork";
+                throw std::invalid_argument("Sorry, uniform noise is not yet supported in this fork");
 
             } else {
 
@@ -688,7 +688,7 @@ void drawWithNoise(VascularTree& vt, svec3 mapSize, svec3 size, float voxelWidth
                     probPepper = atof(strtok(NULL, " "));
                     valPepper = (char)valPepper;
 
-                    throw "Sorry, salt and pepper noise is not yet supported in this fork";
+                    throw std::invalid_argument("Sorry, salt and pepper noise is not yet supported in this fork");
                 }
             }
         }
@@ -727,7 +727,7 @@ void drawWithNoise(VascularTree& vt, svec3 mapSize, svec3 size, float voxelWidth
 
     } else {
 
-        throw "Could not read the noise file";
+        throw std::invalid_argument("Could not read the noise file");
 
     }
 
@@ -822,7 +822,7 @@ void printTreeStructure(VascularTree * vt, const char * filePath){
 
     output.close();
 
-    throw "Unable to find root node.  The GXL file has not been generated.";
+    throw std::runtime_error("Unable to find root node.  The GXL file has not been generated.");
 
 }
 
