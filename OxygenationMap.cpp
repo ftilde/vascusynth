@@ -244,7 +244,7 @@ void OxygenationMap::loadMap(string filename){
         int k; 
 
 		getline(mapFile, line);
-		char* tok = new char[line.size()];
+		char* tok = new char[line.size()+1];
 		strcpy(tok, line.c_str());
 		
 		for(i = 0; i < 3; i++){
@@ -270,7 +270,7 @@ void OxygenationMap::loadMap(string filename){
 		while(!mapFile.eof()){
 			getline(mapFile, line);
 						
-			tok = new char[line.size()];
+			tok = new char[line.size()+1];
 			strcpy(tok, line.c_str());
 
 			int region[6];
@@ -287,7 +287,7 @@ void OxygenationMap::loadMap(string filename){
 			}
 
 			getline(mapFile, line);
-			tok = new char[line.size()];
+			tok = new char[line.size()+1];
 			strcpy(tok, line.c_str());
 
 			double value = atof(line.c_str());

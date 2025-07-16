@@ -642,7 +642,7 @@ void drawWithNoise(VascularTree& vt, svec3 mapSize, svec3 size, float voxelWidth
     if(mapFile.is_open()){
         while(!mapFile.eof()){
             getline(mapFile, line);
-            char* tok = new char[line.size()];
+            char* tok = new char[line.size()+1];
             strcpy(tok, line.c_str());
 
             if(line.length() == 0)
